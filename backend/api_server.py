@@ -10,7 +10,14 @@ from openai import OpenAI
 import json
 
 app = Flask(__name__)
-load_dotenv()
+
+# Load environment variables safely
+try:
+    load_dotenv()
+    print("✅ Environment variables loaded successfully")
+except Exception as e:
+    print(f"⚠️ Warning: Could not load .env file: {e}")
+    print("Continuing with system environment variables...")
 
 JIRA_EMAIL = os.getenv("JIRA_EMAIL")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
