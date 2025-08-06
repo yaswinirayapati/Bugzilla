@@ -1,0 +1,26 @@
+{
+  "name": "bug-tester-ai-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for Bug Tester AI - Log Analysis and JIRA Ticket Creation",
+  "main": "index.html",
+  "scripts": {
+    "dev": "live-server --port=3000 --open=/index.html",
+    "build": "echo 'Static site - no build required'",
+    "start": "live-server --port=3000"
+  },
+  "keywords": [
+    "bug-tester",
+    "log-analysis",
+    "jira",
+    "ai",
+    "frontend"
+  ],
+  "author": "Bug Tester AI Team",
+  "license": "MIT",
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+} 

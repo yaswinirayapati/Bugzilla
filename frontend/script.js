@@ -1,3 +1,36 @@
+// API Configuration
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+  ? 'http://localhost:5000' 
+  : 'https://bugzilla-tggm.onrender.com';
+
+console.log('🔧 API Base URL:', API_BASE_URL);
+
+// Utility function to make API calls
+async function makeApiCall(endpoint, options = {}) {
+  const url = `${API_BASE_URL}${endpoint}`;
+  console.log('🌐 Making API call to:', url);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('❌ API call failed:', error);
+    throw error;
+  }
+}
+
+// File upload and analysis
 document.getElementById("logFile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -5,29 +38,41 @@ document.getElementById("logFile").addEventListener("change", async (e) => {
   const formData = new FormData();
   formData.append("logFile", file);
 
+  // Show loading state
+  const output = document.getElementById("output");
+  output.innerHTML = `
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>🔍 Analyzing log file...</p>
+      <p class="loading-details">Processing ${file.name} (${(file.size / 1024).toFixed(1)} KB)</p>
+    </div>
+  `;
+  output.style.display = "block";
+
   try {
-    const response = await fetch("http://localhost:5000/api/analyze", {
+    const response = await fetch(`${API_BASE_URL}/api/analyze`, {
       method: "POST",
       body: formData,
     });
 
     const data = await response.json();
-    const output = document.getElementById("output");
+    console.log('📊 Analysis results:', data);
 
     if (data.success) {
       let htmlContent = `
         <div class="analysis-header">
           <h3>🔍 Log Analysis Results</h3>
           <div class="summary-stats">
-            <span class="stat">📊 Total Test cases: ${data.total_errors}</span>
-            <span class="stat">✅ Processed: ${data.processed_errors}</span>
-            <span class="stat">🎫 Tickets: ${data.tickets_created.length}</span>
+            <span class="stat">📊 Total Tests: ${data.total_tests || 0}</span>
+            <span class="stat">✅ Passed: ${data.passed_tests || 0}</span>
+            <span class="stat">❌ Failed: ${data.failed_tests || 0}</span>
+            <span class="stat">🎫 Tickets: ${data.tickets_created ? data.tickets_created.length : 0}</span>
           </div>
         </div>
         
         <div class="summary-section">
           <h4>📋 Executive Summary</h4>
-          <pre>${data.summary}</pre>
+          <pre>${data.summary || 'No summary available'}</pre>
         </div>
       `;
 
@@ -93,23 +138,55 @@ document.getElementById("logFile").addEventListener("change", async (e) => {
         </div>
       `;
     }
-
-    output.style.display = "block";
   } catch (err) {
-    const output = document.getElementById("output");
+    console.error('❌ Analysis failed:', err);
     output.innerHTML = `
       <div class="error-message">
         <h3>❌ Connection Error</h3>
         <p>Failed to contact backend: ${err.message}</p>
         <p><strong>Troubleshooting:</strong></p>
         <ul>
-          <li>Make sure the backend server is running on port 5000</li>
-          <li>Check if the backend is accessible at http://localhost:5000</li>
+          <li>Check if the backend is running at: ${API_BASE_URL}</li>
           <li>Verify CORS is properly configured</li>
+          <li>Check network connectivity</li>
+          <li>Try refreshing the page</li>
         </ul>
+        <div class="debug-info">
+          <strong>Debug Info:</strong>
+          <p>API URL: ${API_BASE_URL}</p>
+          <p>File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)</p>
+        </div>
       </div>
     `;
-    output.style.display = "block";
+  }
+});
+
+// Test API connection on page load
+window.addEventListener('load', async () => {
+  try {
+    const statusData = await makeApiCall('/api/status');
+    console.log('✅ Backend status:', statusData);
+    
+    // Update status indicator if available
+    const statusIndicator = document.getElementById('backend-status');
+    if (statusIndicator) {
+      statusIndicator.innerHTML = `
+        <div class="status-success">
+          ✅ Backend Connected: ${statusData.server}
+        </div>
+      `;
+    }
+  } catch (error) {
+    console.warn('⚠️ Backend status check failed:', error);
+    
+    const statusIndicator = document.getElementById('backend-status');
+    if (statusIndicator) {
+      statusIndicator.innerHTML = `
+        <div class="status-warning">
+          ⚠️ Backend Status: ${error.message}
+        </div>
+      `;
+    }
   }
 });
 
