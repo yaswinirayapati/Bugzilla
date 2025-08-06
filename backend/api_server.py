@@ -29,29 +29,35 @@ OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "")
 OPENROUTER_SITE_NAME = os.getenv("OPENROUTER_SITE_NAME", "")
 
 # Initialize OpenRouter AI client
-try:
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=OPENROUTER_API_KEY,
-    )
-    # Test the API key with a simple request
-    completion = client.chat.completions.create(
-        extra_headers={
-            "HTTP-Referer": OPENROUTER_SITE_URL,
-            "X-Title": OPENROUTER_SITE_NAME,
-        },
-        extra_body={},
-        model="qwen/qwen3-4b:free",
-        messages=[
-            {"role": "user", "content": "Hello"}
-        ]
-    )
-    if completion and hasattr(completion, "choices") and len(completion.choices) > 0:
-        AI_STATUS = "✅ AI Integration Active (Qwen)"
-    else:
-        AI_STATUS = "❌ AI Integration Failed: No response from Qwen"
-except Exception as e:
-    AI_STATUS = f"❌ AI Integration Failed: {e}"
+client = None
+if OPENROUTER_API_KEY and OPENROUTER_API_KEY != "your_openrouter_api_key_here":
+    try:
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=OPENROUTER_API_KEY,
+        )
+        # Test the API key with a simple request
+        completion = client.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": OPENROUTER_SITE_URL,
+                "X-Title": OPENROUTER_SITE_NAME,
+            },
+            extra_body={},
+            model="qwen/qwen3-4b:free",
+            messages=[
+                {"role": "user", "content": "Hello"}
+            ]
+        )
+        if completion and hasattr(completion, "choices") and len(completion.choices) > 0:
+            AI_STATUS = "✅ AI Integration Active (Qwen)"
+        else:
+            AI_STATUS = "❌ AI Integration Failed: No response from Qwen"
+    except Exception as e:
+        AI_STATUS = f"❌ AI Integration Failed: {e}"
+        client = None
+else:
+    AI_STATUS = "❌ AI Integration Failed: OpenRouter API key not configured"
+    client = None
 
 # Connect to Jira
 try:
@@ -59,10 +65,34 @@ try:
         basic_auth=(JIRA_EMAIL, JIRA_API_TOKEN),
         options={"server": JIRA_URL}
     )
-    # Test connection by getting project info
-    project = jira.project(PROJECT_KEY)
-    JIRA_STATUS = f"✅ Connected to JIRA successfully. Project: {project.name}"
-    print(f"✅ JIRA Connected - Project: {project.name}, Key: {PROJECT_KEY}")
+    
+    # Try to get project info, if it fails, try to create it
+    try:
+        project = jira.project(PROJECT_KEY)
+        JIRA_STATUS = f"✅ Connected to JIRA successfully. Project: {project.name}"
+        print(f"✅ JIRA Connected - Project: {project.name}, Key: {PROJECT_KEY}")
+    except Exception as project_error:
+        if "No project could be found with key" in str(project_error):
+            print(f"⚠️ Project '{PROJECT_KEY}' not found. Creating it...")
+            try:
+                # Try to create the project
+                project_data = {
+                    'key': PROJECT_KEY,
+                    'name': 'Bug Tracker',
+                    'projectTypeKey': 'software',
+                    'projectTemplateKey': 'com.pyxis.greenhopper.jira:gh-simplified-agility-kanban',
+                    'lead': JIRA_EMAIL
+                }
+                project = jira.create_project(project_data)
+                JIRA_STATUS = f"✅ Created and connected to JIRA project: {project.name}"
+                print(f"✅ JIRA Project Created - Project: {project.name}, Key: {PROJECT_KEY}")
+            except Exception as create_error:
+                JIRA_STATUS = f"❌ Failed to create JIRA project: {create_error}"
+                jira = None
+                print(f"❌ JIRA Project Creation Failed: {create_error}")
+        else:
+            raise project_error
+            
 except Exception as e:
     JIRA_STATUS = f"❌ Failed to connect to JIRA: {e}"
     jira = None
@@ -643,15 +673,19 @@ def analyze():
             # Only create tickets for the first few failed tests (to prevent spam)
             ticket_url = None
             if failed_count < tickets_to_process:
+                print(f"🔧 Attempting to create JIRA ticket for failed test #{failed_count + 1}")
+                print(f"   JIRA Status: {JIRA_STATUS}")
+                print(f"   Project Key: {PROJECT_KEY}")
+                
                 ticket_url = create_detailed_jira_ticket(
                     error_message, error_type, severity, assigned_team, ai_analysis
                 )
                 if ticket_url:
                     tickets_created.append(ticket_url)
                     TICKETS.append({"url": ticket_url, "summary": error_message})
-                    print(f"✅ Ticket created successfully")
+                    print(f"✅ Ticket created successfully: {ticket_url}")
                 else:
-                    print(f"❌ Failed to create ticket")
+                    print(f"❌ Failed to create ticket - JIRA connection issue")
                 failed_count += 1
             else:
                 print(f"⏭️ Skipping ticket creation (limit reached)")
