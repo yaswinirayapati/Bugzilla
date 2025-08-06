@@ -240,19 +240,22 @@ def get_ai_analysis(error_message, error_type):
         return fallback_result
     
     prompt = f"""
-    Analyze this error log entry and provide detailed technical analysis:
-    
+    You are an expert software engineer and DevOps specialist. Analyze this error log entry and provide comprehensive technical analysis:
+
     Error: {error_message}
     Error Type: {error_type}
-    
-    Please provide:
-    1. Root Cause Analysis (2-3 sentences)
-    2. Immediate Fix Steps (numbered list)
-    3. Prevention Measures (2-3 points)
-    4. Technical Impact Assessment
-    5. Recommended Priority Level
-    
-    Format as a structured technical report.
+
+    Provide a detailed technical report with:
+
+    1. **Root Cause Analysis** (3-4 sentences with technical details)
+    2. **Immediate Fix Steps** (numbered list with specific commands/actions)
+    3. **Prevention Measures** (3-4 specific technical solutions)
+    4. **Technical Impact Assessment** (performance, security, user experience)
+    5. **Recommended Priority Level** (Critical/High/Medium/Low with justification)
+    6. **Code Examples** (if applicable)
+    7. **Monitoring Suggestions** (how to detect this issue in the future)
+
+    Format as a professional technical report with clear sections and actionable insights.
     """
     
     try:
@@ -293,28 +296,54 @@ def get_ai_analysis(error_message, error_type):
             return fallback_result
 
 def get_fallback_analysis(error_message, error_type):
-    """Provide basic analysis when AI is rate limited"""
+    """Provide comprehensive analysis when AI is rate limited"""
     error_lower = error_message.lower()
     
-    # Basic analysis based on error type
+    # Enhanced analysis based on error type
     if "connection" in error_lower or "timeout" in error_lower:
         return f"""
-**Root Cause Analysis**: Network connectivity issue or service unavailability causing connection failures.
+**Root Cause Analysis**: Network connectivity issue or service unavailability causing connection failures. This typically occurs due to network infrastructure problems, firewall restrictions, or service endpoint unavailability.
 
 **Immediate Fix Steps**:
-1. Check network connectivity and firewall settings
-2. Verify service endpoints are accessible
-3. Review timeout configurations
-4. Test with different network conditions
+1. Check network connectivity using `ping` and `telnet` commands
+2. Verify firewall settings and port accessibility
+3. Review timeout configurations in application settings
+4. Test with different network conditions and VPN
+5. Check DNS resolution and routing tables
 
 **Prevention Measures**:
-- Implement connection pooling
-- Add retry mechanisms with exponential backoff
-- Monitor network health and latency
+- Implement connection pooling and keep-alive mechanisms
+- Add retry logic with exponential backoff (1s, 2s, 4s, 8s)
+- Set up network monitoring and alerting systems
+- Use circuit breaker patterns for service resilience
+- Implement health checks and load balancing
 
-**Technical Impact**: Service degradation and potential user experience issues.
+**Technical Impact**: Service degradation, increased response times, potential data loss, and poor user experience.
 
-**Recommended Priority**: Medium
+**Recommended Priority**: High (affects core functionality)
+
+**Code Example**:
+```python
+# Retry mechanism with exponential backoff
+import time
+import requests
+
+def make_request_with_retry(url, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, timeout=30)
+            return response
+        except requests.exceptions.RequestException as e:
+            if attempt == max_retries - 1:
+                raise e
+            time.sleep(2 ** attempt)  # Exponential backoff
+```
+
+**Monitoring Suggestions**:
+- Set up network latency monitoring
+- Configure alerts for connection timeouts
+- Monitor service availability with health checks
+- Track failed connection attempts in logs
         """
     elif "database" in error_lower or "sql" in error_lower:
         return f"""
@@ -728,16 +757,17 @@ def analyze():
             failed_count += 1
         else:
             print(f"⏭️ Skipping ticket creation (limit reached)")
-            
-            detailed_analysis.append({
-                'error': error_message,
-                'type': error_type,
-                'severity': severity,
-                'team': assigned_team,
-                'ai_analysis': ai_analysis,
-                'ticket_url': ticket_url,
-                'test_status': 'FAILED'
-            })
+        
+        # Always add to detailed analysis regardless of ticket creation
+        detailed_analysis.append({
+            'error': error_message,
+            'type': error_type,
+            'severity': severity,
+            'team': assigned_team,
+            'ai_analysis': ai_analysis,
+            'ticket_url': ticket_url,
+            'test_status': 'FAILED'
+        })
         # Generate comprehensive summary
         summary = f"""
 🔍 **Log Analysis Complete**
