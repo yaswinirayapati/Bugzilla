@@ -73,7 +73,22 @@ TICKETS = []
 LAST_AI_REQUEST_TIME = 0
 MIN_REQUEST_INTERVAL = 60  # 60 seconds between requests for free tier
 
-CORS(app)
+# CORS Configuration from environment variables
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+CORS_METHODS = os.getenv("CORS_METHODS", "GET,POST,PUT,DELETE,OPTIONS").split(",")
+CORS_ALLOW_HEADERS = os.getenv("CORS_ALLOW_HEADERS", "Content-Type,Authorization,X-Requested-With").split(",")
+CORS_EXPOSE_HEADERS = os.getenv("CORS_EXPOSE_HEADERS", "").split(",") if os.getenv("CORS_EXPOSE_HEADERS") else []
+CORS_SUPPORTS_CREDENTIALS = os.getenv("CORS_SUPPORTS_CREDENTIALS", "false").lower() == "true"
+CORS_MAX_AGE = int(os.getenv("CORS_MAX_AGE", "3600"))
+
+# Initialize CORS with environment-based configuration
+CORS(app, 
+     origins=CORS_ORIGINS,
+     methods=CORS_METHODS,
+     allow_headers=CORS_ALLOW_HEADERS,
+     expose_headers=CORS_EXPOSE_HEADERS,
+     supports_credentials=CORS_SUPPORTS_CREDENTIALS,
+     max_age=CORS_MAX_AGE)
 
 # Technical team mapping based on error patterns
 TEAM_MAPPING = {
@@ -494,7 +509,15 @@ def status():
         "ai_status": AI_STATUS,
         "server": "✅ Backend API Running",
         "project_key": PROJECT_KEY,
-        "jira_connected": jira is not None
+        "jira_connected": jira is not None,
+        "cors_config": {
+            "origins": CORS_ORIGINS,
+            "methods": CORS_METHODS,
+            "allow_headers": CORS_ALLOW_HEADERS,
+            "expose_headers": CORS_EXPOSE_HEADERS,
+            "supports_credentials": CORS_SUPPORTS_CREDENTIALS,
+            "max_age": CORS_MAX_AGE
+        }
     })
 
 @app.route("/api/errors")

@@ -9,6 +9,80 @@
         body {
             font-family: 'Inter', sans-serif;
         }
+        
+        /* Loading state styling */
+        .loading-state {
+            text-align: center;
+            padding: 40px 20px;
+            background-color: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-details {
+            color: #64748b;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        /* Status indicators */
+        .status-success {
+            background-color: #f0fdf4;
+            border-color: #bbf7d0;
+            color: #166534;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid;
+        }
+
+        .status-warning {
+            background-color: #fffbeb;
+            border-color: #fcd34d;
+            color: #92400e;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid;
+        }
+
+        /* Debug info styling */
+        .debug-info {
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .debug-info p {
+            margin: 5px 0;
+        }
+
+        /* Error message styling */
+        .error-message {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            color: #dc2626;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
@@ -47,6 +121,9 @@
         <!-- Status Message -->
         <div id="status" class="mt-4 text-sm text-gray-600 hidden"></div>
 
+        <!-- Output Section for Loading and Errors -->
+        <div id="output" class="mt-6 hidden"></div>
+
         <!-- Results Section -->
         <div id="results" class="mt-6 hidden">
             <h2 class="text-xl font-semibold text-gray-800 mb-4">Analysis Results</h2>
@@ -55,6 +132,38 @@
     </div>
 
     <script>
+        // API Configuration
+        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+          ? 'http://localhost:5000' 
+          : 'https://bugzilla-tggm.onrender.com';
+
+        console.log('🔧 API Base URL:', API_BASE_URL);
+
+        // Utility function to make API calls
+        async function makeApiCall(endpoint, options = {}) {
+          const url = `${API_BASE_URL}${endpoint}`;
+          console.log('🌐 Making API call to:', url);
+          
+          try {
+            const response = await fetch(url, {
+              ...options,
+              headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            return await response.json();
+          } catch (error) {
+            console.error('❌ API call failed:', error);
+            throw error;
+          }
+        }
+
         const logFileInput = document.getElementById('logFile');
         const analyzeBtn = document.getElementById('analyzeBtn');
         const statusDiv = document.getElementById('status');
@@ -77,16 +186,30 @@
             const formData = new FormData();
             formData.append('logFile', file);
 
+            // Show loading state
+            const output = document.getElementById('output');
+            if (output) {
+                output.innerHTML = `
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <p>🔍 Analyzing log file...</p>
+                        <p class="loading-details">Processing ${file.name} (${(file.size / 1024).toFixed(1)} KB)</p>
+                    </div>
+                `;
+                output.style.display = "block";
+            }
+
             showStatus('Analyzing log file... Please wait.', 'text-blue-600');
             analyzeBtn.disabled = true;
 
             try {
-                const response = await fetch('http://127.0.0.1:5000/api/analyze', {
+                const response = await fetch(`${API_BASE_URL}/api/analyze`, {
                     method: 'POST',
                     body: formData
                 });
 
                 const data = await response.json();
+                console.log('📊 Analysis results:', data);
 
                 if (response.ok && data.success) {
                     showStatus('Success: Analysis completed!', 'text-green-600');
@@ -95,7 +218,30 @@
                     showStatus(`Failed: ${data.error || 'Analysis failed.'}`, 'text-red-600');
                 }
             } catch (error) {
+                console.error('❌ Analysis failed:', error);
                 showStatus(`Failed: Network error - ${error.message}`, 'text-red-600');
+                
+                // Show detailed error information
+                if (output) {
+                    output.innerHTML = `
+                        <div class="error-message">
+                            <h3>❌ Connection Error</h3>
+                            <p>Failed to contact backend: ${error.message}</p>
+                            <p><strong>Troubleshooting:</strong></p>
+                            <ul>
+                                <li>Check if the backend is running at: ${API_BASE_URL}</li>
+                                <li>Verify CORS is properly configured</li>
+                                <li>Check network connectivity</li>
+                                <li>Try refreshing the page</li>
+                            </ul>
+                            <div class="debug-info">
+                                <strong>Debug Info:</strong>
+                                <p>API URL: ${API_BASE_URL}</p>
+                                <p>File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)</p>
+                            </div>
+                        </div>
+                    `;
+                }
             } finally {
                 analyzeBtn.disabled = false;
             }
@@ -214,6 +360,35 @@
                 }
             }
         }
+
+        // Test API connection on page load
+        window.addEventListener('load', async () => {
+            try {
+                const statusData = await makeApiCall('/api/status');
+                console.log('✅ Backend status:', statusData);
+                
+                // Update status indicator if available
+                const statusIndicator = document.getElementById('backend-status');
+                if (statusIndicator) {
+                    statusIndicator.innerHTML = `
+                        <div class="status-success">
+                            ✅ Backend Connected: ${statusData.server}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.warn('⚠️ Backend status check failed:', error);
+                
+                const statusIndicator = document.getElementById('backend-status');
+                if (statusIndicator) {
+                    statusIndicator.innerHTML = `
+                        <div class="status-warning">
+                            ⚠️ Backend Status: ${error.message}
+                        </div>
+                    `;
+                }
+            }
+        });
 
     </script>
 </body>
