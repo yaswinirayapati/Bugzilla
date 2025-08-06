@@ -118,13 +118,16 @@ CORS_EXPOSE_HEADERS = os.getenv("CORS_EXPOSE_HEADERS", "").split(",") if os.gete
 CORS_SUPPORTS_CREDENTIALS = os.getenv("CORS_SUPPORTS_CREDENTIALS", "false").lower() == "true"
 CORS_MAX_AGE = int(os.getenv("CORS_MAX_AGE", "3600"))
 
+# Allow all origins for maximum compatibility
+print(f"🔧 CORS Configuration: Allowing all origins (*)")
+
 # Initialize CORS with environment-based configuration
 CORS(app, 
-     origins=CORS_ORIGINS,
+     origins="*",  # Allow all origins including any Vercel domain
      methods=CORS_METHODS,
      allow_headers=CORS_ALLOW_HEADERS,
      expose_headers=CORS_EXPOSE_HEADERS,
-     supports_credentials=CORS_SUPPORTS_CREDENTIALS,
+     supports_credentials=False,  # Must be False when origins="*"
      max_age=CORS_MAX_AGE)
 
 # Technical team mapping based on error patterns
@@ -425,6 +428,15 @@ def create_detailed_jira_ticket(error_message, error_type, severity, assigned_te
 @app.route("/")
 def home():
     return "Welcome to the Bugzilla-F API! Try /api/status for health check."
+
+@app.route("/api/analyze", methods=["OPTIONS"])
+def analyze_options():
+    """Handle CORS preflight requests"""
+    response = app.make_default_options_response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+    return response
 
 @app.route("/api/test-team-assignment", methods=["POST"])
 def test_team_assignment():
