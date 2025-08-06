@@ -6,6 +6,8 @@ from datetime import datetime
 from flask_cors import CORS
 import requests
 import re
+from openai import OpenAI
+import json
 
 app = Flask(__name__)
 load_dotenv()
@@ -16,32 +18,31 @@ JIRA_URL = os.getenv("JIRA_URL")
 PROJECT_KEY = os.getenv("PROJECT_KEY", "OPS")
 LOG_FILE_PATH = os.getenv("LOG_FILE_PATH")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "")
+OPENROUTER_SITE_NAME = os.getenv("OPENROUTER_SITE_NAME", "")
 
-# Initialize OpenRouter AI
+# Initialize OpenRouter AI client
 try:
-    # Test the API key with a simple request
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    test_data = {
-        "model": "openai/gpt-3.5-turbo",
-        "messages": [{"role": "user", "content": "Hello"}]
-    }
-    
-    test_response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers=headers,
-        json=test_data,
-        timeout=10
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
     )
-    
-    if test_response.status_code == 200:
-        AI_STATUS = "✅ AI Integration Active"
+    # Test the API key with a simple request
+    completion = client.chat.completions.create(
+        extra_headers={
+            "HTTP-Referer": OPENROUTER_SITE_URL,
+            "X-Title": OPENROUTER_SITE_NAME,
+        },
+        extra_body={},
+        model="qwen/qwen3-4b:free",
+        messages=[
+            {"role": "user", "content": "Hello"}
+        ]
+    )
+    if completion and hasattr(completion, "choices") and len(completion.choices) > 0:
+        AI_STATUS = "✅ AI Integration Active (Qwen)"
     else:
-        AI_STATUS = f"❌ AI Integration Failed: HTTP {test_response.status_code}"
-        
+        AI_STATUS = "❌ AI Integration Failed: No response from Qwen"
 except Exception as e:
     AI_STATUS = f"❌ AI Integration Failed: {e}"
 
@@ -67,6 +68,10 @@ except Exception as e:
 # Store errors and tickets in memory for demo
 ERRORS = []
 TICKETS = []
+
+# Rate limiting for AI requests
+LAST_AI_REQUEST_TIME = 0
+MIN_REQUEST_INTERVAL = 60  # 60 seconds between requests for free tier
 
 CORS(app)
 
@@ -147,8 +152,20 @@ def assign_team(error_message):
         return role
     return "system"
 
+import time
+
 def get_ai_analysis(error_message, error_type):
-    """Get detailed AI analysis and suggestions using OpenRouter API"""
+    """Get detailed AI analysis and suggestions using Qwen model via OpenRouter API"""
+    global LAST_AI_REQUEST_TIME
+    
+    # Check if enough time has passed since last request
+    current_time = time.time()
+    time_since_last = current_time - LAST_AI_REQUEST_TIME
+    
+    if time_since_last < MIN_REQUEST_INTERVAL:
+        # Use fallback analysis if rate limited
+        return get_fallback_analysis(error_message, error_type)
+    
     prompt = f"""
     Analyze this error log entry and provide detailed technical analysis:
     
@@ -166,43 +183,115 @@ def get_ai_analysis(error_message, error_type):
     """
     
     try:
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        # Update last request time
+        LAST_AI_REQUEST_TIME = current_time
         
-        data = {
-            "model": "openai/gpt-3.5-turbo",
-            "messages": [
+        completion = client.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": OPENROUTER_SITE_URL,
+                "X-Title": OPENROUTER_SITE_NAME,
+            },
+            extra_body={},
+            model="qwen/qwen3-4b:free",
+            messages=[
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 500,
-            "temperature": 0.3
-        }
-        
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=30
+            max_tokens=500,
+            temperature=0.3
         )
-        
-        if response.status_code == 200:
-            result = response.json()
-            if "choices" in result and len(result["choices"]) > 0:
-                return result["choices"][0]["message"]["content"].strip()
-            else:
-                return "AI analysis failed: Invalid response format"
+        if completion and hasattr(completion, "choices") and len(completion.choices) > 0:
+            return completion.choices[0].message.content.strip()
         else:
-            error_detail = response.text if response.text else f"HTTP {response.status_code}"
-            return f"AI analysis failed: {error_detail}"
-            
-    except requests.exceptions.Timeout:
-        return "AI analysis failed: Request timeout"
-    except requests.exceptions.RequestException as e:
-        return f"AI analysis failed: Network error - {str(e)}"
+            return "AI analysis failed: Invalid response format"
     except Exception as e:
-        return f"AI analysis failed: {str(e)}"
+        error_str = str(e)
+        if "429" in error_str or "rate limit" in error_str.lower():
+            # Provide fallback analysis when rate limited
+            return get_fallback_analysis(error_message, error_type)
+        else:
+            return f"AI analysis failed: {error_str}"
+
+def get_fallback_analysis(error_message, error_type):
+    """Provide basic analysis when AI is rate limited"""
+    error_lower = error_message.lower()
+    
+    # Basic analysis based on error type
+    if "connection" in error_lower or "timeout" in error_lower:
+        return f"""
+**Root Cause Analysis**: Network connectivity issue or service unavailability causing connection failures.
+
+**Immediate Fix Steps**:
+1. Check network connectivity and firewall settings
+2. Verify service endpoints are accessible
+3. Review timeout configurations
+4. Test with different network conditions
+
+**Prevention Measures**:
+- Implement connection pooling
+- Add retry mechanisms with exponential backoff
+- Monitor network health and latency
+
+**Technical Impact**: Service degradation and potential user experience issues.
+
+**Recommended Priority**: Medium
+        """
+    elif "database" in error_lower or "sql" in error_lower:
+        return f"""
+**Root Cause Analysis**: Database connection or query execution failure.
+
+**Immediate Fix Steps**:
+1. Check database server status and connectivity
+2. Review SQL query syntax and performance
+3. Verify database credentials and permissions
+4. Check for deadlocks or resource contention
+
+**Prevention Measures**:
+- Implement proper connection pooling
+- Add query timeout and retry logic
+- Regular database maintenance and monitoring
+
+**Technical Impact**: Data access issues and potential data loss.
+
+**Recommended Priority**: High
+        """
+    elif "authentication" in error_lower or "unauthorized" in error_lower:
+        return f"""
+**Root Cause Analysis**: Authentication or authorization failure.
+
+**Immediate Fix Steps**:
+1. Verify user credentials and permissions
+2. Check authentication service status
+3. Review security token validity
+4. Validate access control policies
+
+**Prevention Measures**:
+- Implement proper session management
+- Add multi-factor authentication
+- Regular security audits and monitoring
+
+**Technical Impact**: Security vulnerability and access control issues.
+
+**Recommended Priority**: Critical
+        """
+    else:
+        return f"""
+**Root Cause Analysis**: General system error requiring investigation.
+
+**Immediate Fix Steps**:
+1. Review error logs for additional context
+2. Check system resources and performance
+3. Verify application configuration
+4. Test in different environments
+
+**Prevention Measures**:
+- Implement comprehensive error handling
+- Add monitoring and alerting systems
+- Regular system health checks
+
+**Technical Impact**: Potential service disruption and user impact.
+
+**Recommended Priority**: Medium
+        """
 
 def create_detailed_jira_ticket(error_message, error_type, severity, assigned_team, ai_analysis):
     """Create comprehensive JIRA ticket with all details and assign to developer"""
@@ -280,6 +369,10 @@ def create_detailed_jira_ticket(error_message, error_type, severity, assigned_te
         print(f"   Error Type: {error_type}")
         print(f"   Team: {assigned_team}")
         return None
+
+@app.route("/")
+def home():
+    return "Welcome to the Bugzilla-F API! Try /api/status for health check."
 
 @app.route("/api/test-team-assignment", methods=["POST"])
 def test_team_assignment():
@@ -495,22 +588,44 @@ def analyze():
                 "suggestion": "The log file doesn't contain recognizable test case results.",
                 "ticket": None
             })
-        # Process failed test cases with detailed analysis
+        # Process only failed test cases for detailed analysis
         detailed_analysis = []
         tickets_created = []
+        max_tickets_to_create = 5  # Configurable limit to prevent spam
+        tickets_to_process = min(len(failed_tests), max_tickets_to_create)
+        
         print(f"🔍 Processing {total_tests} test cases ({total_passed} passed, {total_failed} failed)...")
-        # Only process failed tests for detailed analysis and JIRA tickets
-        for test_data in failed_tests[:3]:  # Limit to first 3 failed tests to avoid spam
+        print(f"📋 Creating tickets for first {tickets_to_process} failed tests (limit: {max_tickets_to_create})")
+        
+        # Process ONLY failed test cases for detailed analysis
+        failed_count = 0  # Track how many failed tests we've processed for tickets
+        
+        for test_data in failed_tests:
             error_message = test_data['content']
+            
+            # Analyze failed tests and create tickets
             error_type, severity = analyze_error_type(error_message)
             assigned_team = assign_team(error_message)
             ai_analysis = get_ai_analysis(error_message, error_type)
             print(f"📋 Failed Test: {error_message[:50]}...")
             print(f"   Type: {error_type}, Severity: {severity}, Team: {assigned_team}")
-            # Create detailed JIRA ticket for failed tests
-            ticket_url = create_detailed_jira_ticket(
-                error_message, error_type, severity, assigned_team, ai_analysis
-            )
+            
+            # Only create tickets for the first few failed tests (to prevent spam)
+            ticket_url = None
+            if failed_count < tickets_to_process:
+                ticket_url = create_detailed_jira_ticket(
+                    error_message, error_type, severity, assigned_team, ai_analysis
+                )
+                if ticket_url:
+                    tickets_created.append(ticket_url)
+                    TICKETS.append({"url": ticket_url, "summary": error_message})
+                    print(f"✅ Ticket created successfully")
+                else:
+                    print(f"❌ Failed to create ticket")
+                failed_count += 1
+            else:
+                print(f"⏭️ Skipping ticket creation (limit reached)")
+            
             detailed_analysis.append({
                 'error': error_message,
                 'type': error_type,
@@ -520,12 +635,6 @@ def analyze():
                 'ticket_url': ticket_url,
                 'test_status': 'FAILED'
             })
-            if ticket_url:
-                tickets_created.append(ticket_url)
-                TICKETS.append({"url": ticket_url, "summary": error_message})
-                print(f"✅ Ticket created successfully")
-            else:
-                print(f"❌ Failed to create ticket")
         # Generate comprehensive summary
         summary = f"""
 🔍 **Log Analysis Complete**
@@ -534,7 +643,13 @@ def analyze():
 - Total Test Cases: {total_tests}
 - Passed Tests: {total_passed}
 - Failed Tests: {total_failed}
-- JIRA Tickets Created: {len(tickets_created)}
+- JIRA Tickets Created: {len(tickets_created)} (max {max_tickets_to_create} allowed)
+- Remaining Failed Tests: {total_failed - len(tickets_created)}
+
+📋 **Failed Test Cases Analyzed:**
+- Showing {len(detailed_analysis)} failed test cases with detailed analysis
+- JIRA tickets created for first {len(tickets_created)} failed tests (limited to prevent spam)
+- Passed tests are not shown in detailed analysis
 
 🎯 **Key Issues:**
 {chr(10).join([f"- {analysis['type']} (Severity: {analysis['severity']}) - Assigned to {analysis['team']}" for analysis in detailed_analysis])}
@@ -543,6 +658,7 @@ def analyze():
 - Review all created JIRA tickets
 - Assign team members based on error types
 - Implement suggested fixes from AI analysis
+- Consider creating additional tickets for remaining {total_failed - len(tickets_created)} failed tests if needed
     """
         return jsonify({
             "success": True,
@@ -552,7 +668,9 @@ def analyze():
             "total_tests": total_tests,
             "passed_tests": total_passed,
             "failed_tests": total_failed,
-            "processed_errors": len(detailed_analysis)
+            "processed_errors": len(detailed_analysis),
+            "remaining_failed_tests": total_failed - len(tickets_created),
+            "max_tickets_limit": max_tickets_to_create
         })
     except Exception as e:
         import traceback
@@ -563,5 +681,123 @@ def analyze():
             "error": f"Internal server error: {str(e)}"
         }), 500
 
+@app.route("/api/analyze_qwen", methods=["POST"])
+def analyze_qwen():
+    """
+    Analyze uploaded log file, generate AI-powered bug report, and create a Jira ticket using Qwen model.
+    """
+    if 'logFile' not in request.files:
+        return jsonify({"success": False, "error": "No file uploaded"}), 400
+    
+    file = request.files['logFile']
+    content = file.read().decode('utf-8')
+
+    prompt = f""" 
+    Analyze the following log file content and generate a comprehensive bug report.
+
+    Log Content:
+    {content}
+
+    Please return the output strictly in this *valid JSON format*, with correct syntax (double-quoted keys and strings, arrays where appropriate). Do NOT include explanations, comments, or markdown formatting.
+
+    Example:
+    {{
+      "root_cause_analysis": "Describe root cause in one sentence.",
+      "immediate_fix_steps": [
+        "First step.",
+        "Second step."
+      ],
+      "prevention_measures": [
+        "First prevention.",
+        "Second prevention."
+      ],
+      "technical_impact_assessment": "Explain technical impact.",
+      "recommended_priority_level": "High | Medium | Low",
+      "suggested_team_for_resolution": "Team Name"
+    }}
+
+    Return only JSON following the format above.
+    """
+    
+    try:
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "qwen/qwen3-4b:free",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 1000,
+            "temperature": 0.3
+        }
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            if "choices" in result and len(result["choices"]) > 0:
+                ai_response = result["choices"][0]["message"]["content"].strip()
+                # Save AI response for debugging
+                with open("ai_response.txt", "w", encoding="utf-8") as file:
+                    file.write(ai_response)
+                
+                # Parse AI response as JSON
+                try:
+                    print(ai_response)
+                    ai_response_json = json.loads(ai_response)
+                    bug_report = ai_response_json.get("bug_report", ai_response_json)
+                except json.JSONDecodeError:
+                    return jsonify({"success": False, "error": "Invalid JSON format in AI response"}), 400
+                
+                # Extract fields from AI response
+                root_cause = bug_report.get("root_cause_analysis", "Unknown")
+                priority = bug_report.get("recommended_priority_level", "Medium")
+                team = bug_report.get("suggested_team_for_resolution", "Development Team")
+                technical_impact = bug_report.get("technical_impact_assessment", "Unknown")
+                immediate_fix_steps = bug_report.get("immediate_fix_steps", [])
+                prevention_measures = bug_report.get("prevention_measures", [])
+                
+                # Format AI analysis for Jira ticket
+                ai_analysis = f"""
+**Root Cause Analysis**: {root_cause}
+**Immediate Fix Steps**:
+{chr(10).join([f'- {step}' for step in immediate_fix_steps])}
+**Prevention Measures**:
+{chr(10).join([f'- {measure}' for measure in prevention_measures])}
+**Technical Impact**: {technical_impact}
+                """
+                
+                # Create Jira ticket using existing function
+                ticket_url = create_detailed_jira_ticket(
+                    error_message=root_cause,
+                    error_type="Task Execution Failure",
+                    severity=priority,
+                    assigned_team=team,
+                    ai_analysis=ai_analysis
+                )
+                
+                # Return response with ticket URL
+                response_data = {
+                    "success": True,
+                    "report": ai_response,
+                    "ticket_url": ticket_url if ticket_url else "Failed to create Jira ticket"
+                }
+                return jsonify(response_data)
+            else:
+                return jsonify({"success": False, "error": "Invalid response format from AI"}), 500
+        else:
+            error_detail = response.text if response.text else f"HTTP {response.status_code}"
+            return jsonify({"success": False, "error": f"AI analysis failed: {error_detail}"}), 500
+    except requests.exceptions.Timeout:
+        return jsonify({"success": False, "error": "AI analysis failed: Request timeout"}), 500
+    except requests.exceptions.RequestException as e:
+        return jsonify({"success": False, "error": f"AI analysis failed: Network error - {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": f"AI analysis failed: {str(e)}"}), 500
+
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
