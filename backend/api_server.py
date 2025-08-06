@@ -737,37 +737,37 @@ def analyze():
             print(f"📋 Failed Test: {error_message[:50]}...")
             print(f"   Type: {error_type}, Severity: {severity}, Team: {assigned_team}")
             
-                    # Only create tickets for the first few failed tests (to prevent spam)
-        ticket_url = None
-        if failed_count < tickets_to_process and jira:  # Only try if JIRA is connected
-            print(f"🔧 Creating JIRA ticket #{failed_count + 1}/{tickets_to_process}")
-            
-            ticket_url = create_detailed_jira_ticket(
-                error_message, error_type, severity, assigned_team, ai_analysis
-            )
-            if ticket_url:
-                tickets_created.append(ticket_url)
-                TICKETS.append({"url": ticket_url, "summary": error_message})
-                print(f"✅ Ticket created: {ticket_url}")
+            # Only create tickets for the first few failed tests (to prevent spam)
+            ticket_url = None
+            if failed_count < tickets_to_process and jira:  # Only try if JIRA is connected
+                print(f"🔧 Creating JIRA ticket #{failed_count + 1}/{tickets_to_process}")
+                
+                ticket_url = create_detailed_jira_ticket(
+                    error_message, error_type, severity, assigned_team, ai_analysis
+                )
+                if ticket_url:
+                    tickets_created.append(ticket_url)
+                    TICKETS.append({"url": ticket_url, "summary": error_message})
+                    print(f"✅ Ticket created: {ticket_url}")
+                else:
+                    print(f"❌ Ticket creation failed")
+                failed_count += 1
+            elif failed_count < tickets_to_process:
+                print(f"⏭️ Skipping ticket creation (JIRA not connected)")
+                failed_count += 1
             else:
-                print(f"❌ Ticket creation failed")
-            failed_count += 1
-        elif failed_count < tickets_to_process:
-            print(f"⏭️ Skipping ticket creation (JIRA not connected)")
-            failed_count += 1
-        else:
-            print(f"⏭️ Skipping ticket creation (limit reached)")
-        
-        # Always add to detailed analysis regardless of ticket creation
-        detailed_analysis.append({
-            'error': error_message,
-            'type': error_type,
-            'severity': severity,
-            'team': assigned_team,
-            'ai_analysis': ai_analysis,
-            'ticket_url': ticket_url,
-            'test_status': 'FAILED'
-        })
+                print(f"⏭️ Skipping ticket creation (limit reached)")
+            
+            # Always add to detailed analysis regardless of ticket creation
+            detailed_analysis.append({
+                'error': error_message,
+                'type': error_type,
+                'severity': severity,
+                'team': assigned_team,
+                'ai_analysis': ai_analysis,
+                'ticket_url': ticket_url,
+                'test_status': 'FAILED'
+            })
         # Generate comprehensive summary
         summary = f"""
 🔍 **Log Analysis Complete**

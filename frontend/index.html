@@ -213,9 +213,17 @@
 
                 if (response.ok && data.success) {
                     showStatus('Success: Analysis completed!', 'text-green-600');
+                    // Hide loading state
+                    if (output) {
+                        output.style.display = "none";
+                    }
                     displayResults(data);
                 } else {
                     showStatus(`Failed: ${data.error || 'Analysis failed.'}`, 'text-red-600');
+                    // Hide loading state on error too
+                    if (output) {
+                        output.style.display = "none";
+                    }
                 }
             } catch (error) {
                 console.error('❌ Analysis failed:', error);
