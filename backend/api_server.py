@@ -106,9 +106,12 @@ except Exception as e:
 ERRORS = []
 TICKETS = []
 
-# Rate limiting for AI requests
+# Rate limiting for AI requests - Reduced for faster processing
 LAST_AI_REQUEST_TIME = 0
-MIN_REQUEST_INTERVAL = 60  # 60 seconds between requests for free tier
+MIN_REQUEST_INTERVAL = 10  # Reduced to 10 seconds for faster processing
+
+# Cache for AI analysis to avoid repeated calls
+AI_ANALYSIS_CACHE = {}
 
 # CORS Configuration from environment variables
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
@@ -211,7 +214,20 @@ import time
 
 def get_ai_analysis(error_message, error_type):
     """Get detailed AI analysis and suggestions using Qwen model via OpenRouter API"""
-    global LAST_AI_REQUEST_TIME
+    global LAST_AI_REQUEST_TIME, AI_ANALYSIS_CACHE
+    
+    # Create cache key
+    cache_key = f"{error_message[:100]}_{error_type}"
+    
+    # Check cache first for instant response
+    if cache_key in AI_ANALYSIS_CACHE:
+        return AI_ANALYSIS_CACHE[cache_key]
+    
+    # If client is not available, use fallback analysis
+    if not client:
+        fallback_result = get_fallback_analysis(error_message, error_type)
+        AI_ANALYSIS_CACHE[cache_key] = fallback_result
+        return fallback_result
     
     # Check if enough time has passed since last request
     current_time = time.time()
@@ -219,7 +235,9 @@ def get_ai_analysis(error_message, error_type):
     
     if time_since_last < MIN_REQUEST_INTERVAL:
         # Use fallback analysis if rate limited
-        return get_fallback_analysis(error_message, error_type)
+        fallback_result = get_fallback_analysis(error_message, error_type)
+        AI_ANALYSIS_CACHE[cache_key] = fallback_result
+        return fallback_result
     
     prompt = f"""
     Analyze this error log entry and provide detailed technical analysis:
@@ -255,16 +273,24 @@ def get_ai_analysis(error_message, error_type):
             temperature=0.3
         )
         if completion and hasattr(completion, "choices") and len(completion.choices) > 0:
-            return completion.choices[0].message.content.strip()
+            result = completion.choices[0].message.content.strip()
+            AI_ANALYSIS_CACHE[cache_key] = result
+            return result
         else:
-            return "AI analysis failed: Invalid response format"
+            fallback_result = "AI analysis failed: Invalid response format"
+            AI_ANALYSIS_CACHE[cache_key] = fallback_result
+            return fallback_result
     except Exception as e:
         error_str = str(e)
         if "429" in error_str or "rate limit" in error_str.lower():
             # Provide fallback analysis when rate limited
-            return get_fallback_analysis(error_message, error_type)
+            fallback_result = get_fallback_analysis(error_message, error_type)
+            AI_ANALYSIS_CACHE[cache_key] = fallback_result
+            return fallback_result
         else:
-            return f"AI analysis failed: {error_str}"
+            fallback_result = f"AI analysis failed: {error_str}"
+            AI_ANALYSIS_CACHE[cache_key] = fallback_result
+            return fallback_result
 
 def get_fallback_analysis(error_message, error_type):
     """Provide basic analysis when AI is rate limited"""
@@ -682,25 +708,26 @@ def analyze():
             print(f"📋 Failed Test: {error_message[:50]}...")
             print(f"   Type: {error_type}, Severity: {severity}, Team: {assigned_team}")
             
-            # Only create tickets for the first few failed tests (to prevent spam)
-            ticket_url = None
-            if failed_count < tickets_to_process:
-                print(f"🔧 Attempting to create JIRA ticket for failed test #{failed_count + 1}")
-                print(f"   JIRA Status: {JIRA_STATUS}")
-                print(f"   Project Key: {PROJECT_KEY}")
-                
-                ticket_url = create_detailed_jira_ticket(
-                    error_message, error_type, severity, assigned_team, ai_analysis
-                )
-                if ticket_url:
-                    tickets_created.append(ticket_url)
-                    TICKETS.append({"url": ticket_url, "summary": error_message})
-                    print(f"✅ Ticket created successfully: {ticket_url}")
-                else:
-                    print(f"❌ Failed to create ticket - JIRA connection issue")
-                failed_count += 1
+                    # Only create tickets for the first few failed tests (to prevent spam)
+        ticket_url = None
+        if failed_count < tickets_to_process and jira:  # Only try if JIRA is connected
+            print(f"🔧 Creating JIRA ticket #{failed_count + 1}/{tickets_to_process}")
+            
+            ticket_url = create_detailed_jira_ticket(
+                error_message, error_type, severity, assigned_team, ai_analysis
+            )
+            if ticket_url:
+                tickets_created.append(ticket_url)
+                TICKETS.append({"url": ticket_url, "summary": error_message})
+                print(f"✅ Ticket created: {ticket_url}")
             else:
-                print(f"⏭️ Skipping ticket creation (limit reached)")
+                print(f"❌ Ticket creation failed")
+            failed_count += 1
+        elif failed_count < tickets_to_process:
+            print(f"⏭️ Skipping ticket creation (JIRA not connected)")
+            failed_count += 1
+        else:
+            print(f"⏭️ Skipping ticket creation (limit reached)")
             
             detailed_analysis.append({
                 'error': error_message,
