@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bug Tester AI - Log File Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-2xl w-full bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">Bug Tester AI - Log Analysis</h1>
+
+        <!-- File Upload Section -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2" for="logFile">
+                Upload Log File
+            </label>
+            <input type="file" id="logFile" accept=".log,.txt"
+                   class="block w-full text-sm text-gray-500
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-full file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700
+                          hover:file:bg-blue-100">
+        </div>
+
+        <!-- Analyze Button -->
+        <button id="analyzeBtn"
+                class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700
+                       transition duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                disabled>
+            Analyze Log File
+        </button>
+
+        <!-- Status Message -->
+        <div id="status" class="mt-4 text-sm text-gray-600 hidden"></div>
+
+        <!-- Results Section -->
+        <div id="results" class="mt-6 hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Analysis Results</h2>
+            <div id="resultContent" class="bg-gray-50 p-4 rounded-md"></div>
+        </div>
+    </div>
+
+    <script>
+        const logFileInput = document.getElementById('logFile');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const statusDiv = document.getElementById('status');
+        const resultsDiv = document.getElementById('results');
+        const resultContent = document.getElementById('resultContent');
+
+        // Enable/disable analyze button based on file selection
+        logFileInput.addEventListener('change', () => {
+            analyzeBtn.disabled = !logFileInput.files.length;
+        });
+
+        // Handle analyze button click
+        analyzeBtn.addEventListener('click', async () => {
+            if (!logFileInput.files.length) {
+                showStatus('Failed: Please select a log file first.', 'text-red-600');
+                return;
+            }
+
+            const file = logFileInput.files[0];
+            const formData = new FormData();
+            formData.append('logFile', file);
+
+            showStatus('Analyzing log file... Please wait.', 'text-blue-600');
+            analyzeBtn.disabled = true;
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showStatus('Success: Analysis completed!', 'text-green-600');
+                    displayResults(data);
+                } else {
+                    showStatus(`Failed: ${data.error || 'Analysis failed.'}`, 'text-red-600');
+                }
+            } catch (error) {
+                showStatus(`Failed: Network error - ${error.message}`, 'text-red-600');
+            } finally {
+                analyzeBtn.disabled = false;
+            }
+        });
+
+        // Display status message
+        function showStatus(message, className) {
+            statusDiv.textContent = message;
+            statusDiv.className = `mt-4 text-sm ${className}`;
+            statusDiv.classList.remove('hidden');
+        }
+
+        // Display analysis results
+        function displayResults(data) {
+            try {
+                console.log('Analysis Data:', data);
+
+                let htmlContent = '';
+
+                // Display summary
+                if (data.summary) {
+                    htmlContent += `
+                        <div class="mb-6">
+                            <h3 class="font-semibold text-gray-700 mb-2">Analysis Summary</h3>
+                            <div class="bg-gray-50 p-4 rounded-md">
+                                <pre class="whitespace-pre-wrap text-sm">${data.summary}</pre>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Display detailed analysis
+                if (data.detailed_analysis && data.detailed_analysis.length > 0) {
+                    htmlContent += `
+                        <div class="mb-6">
+                            <h3 class="font-semibold text-gray-700 mb-2">Detailed Analysis</h3>
+                    `;
+
+                    data.detailed_analysis.forEach((analysis, index) => {
+                        htmlContent += `
+                            <div class="bg-white border border-gray-200 rounded-md p-4 mb-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="font-medium text-gray-800">Error ${index + 1}</h4>
+                                    <div class="flex space-x-2">
+                                        <span class="px-2 py-1 text-xs rounded-full ${analysis.severity === 'Critical' ? 'bg-red-100 text-red-800' : analysis.severity === 'High' ? 'bg-orange-100 text-orange-800' : 'bg-yellow-100 text-yellow-800'}">${analysis.severity}</span>
+                                        <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">${analysis.team}</span>
+                                        <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">${analysis.type}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <strong class="text-gray-700">Error Message:</strong>
+                                    <pre class="bg-gray-50 p-2 rounded text-sm mt-1 overflow-x-auto">${analysis.error}</pre>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <strong class="text-gray-700">AI Analysis:</strong>
+                                    <div class="bg-blue-50 p-3 rounded mt-1">
+                                        <pre class="whitespace-pre-wrap text-sm">${analysis.ai_analysis}</pre>
+                                    </div>
+                                </div>
+                                
+                                ${analysis.ticket_url ? `
+                                    <div class="mt-3">
+                                        <a href="${analysis.ticket_url}" target="_blank" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                            </svg>
+                                            View JIRA Ticket
+                                        </a>
+                                    </div>
+                                ` : '<p class="text-red-600 text-sm">❌ Failed to create JIRA ticket</p>'}
+                            </div>
+                        `;
+                    });
+
+                    htmlContent += `</div>`;
+                }
+
+                // Display statistics
+                if (data.total_tests !== undefined) {
+                    htmlContent += `
+                        <div class="mb-6">
+                            <h3 class="font-semibold text-gray-700 mb-2">Statistics</h3>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="bg-green-50 p-3 rounded text-center">
+                                    <div class="text-2xl font-bold text-green-600">${data.total_tests}</div>
+                                    <div class="text-sm text-green-700">Total Tests</div>
+                                </div>
+                                <div class="bg-green-50 p-3 rounded text-center">
+                                    <div class="text-2xl font-bold text-green-600">${data.passed_tests}</div>
+                                    <div class="text-sm text-green-700">Passed</div>
+                                </div>
+                                <div class="bg-red-50 p-3 rounded text-center">
+                                    <div class="text-2xl font-bold text-red-600">${data.failed_tests}</div>
+                                    <div class="text-sm text-red-700">Failed</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (htmlContent && resultContent && resultsDiv) {
+                    resultContent.innerHTML = htmlContent;
+                    resultsDiv.classList.remove('hidden');
+                } else if (resultContent && resultsDiv) {
+                    resultContent.innerHTML = `<p class="text-gray-600">No analysis results available.</p>`;
+                    resultsDiv.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                showStatus(`Failed: Error parsing results - ${error.message}`, 'text-red-600');
+                if (resultContent && resultsDiv) {
+                    resultContent.innerHTML = `<p class="text-red-600">Error parsing results: ${error.message}</p>`;
+                    resultsDiv.classList.remove('hidden');
+                }
+            }
+        }
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+[2025-07-29 10:00:00] INFO: Application started
+[2025-07-29 10:01:00] ERROR: NullPointerException in UserService.java
+[2025-07-29 10:02:00] WARNING: High memory usage detected
+[2025-07-29 10:03:00] FAILED: Could not connect to database
+[2025-07-29 10:04:00] INFO: Application stopped
+[2025-07-29 21:16:31] INFO: Application started
+[2025-07-29 21:16:32] ERROR: NullPointerException in UserService.java
+[2025-07-29 21:16:33] WARNING: Memory usage high
+[2025-07-29 21:16:34] CRITICAL: Could not connect to database
+[2025-07-29 21:16:34] INFO: Application stopped
+[2025-07-29 22:40:05] INFO: Application started
+[2025-07-29 22:40:06] ERROR: NullPointerException in UserService.java
+[2025-07-29 22:40:07] WARNING: Memory usage high
+[2025-07-29 22:40:08] CRITICAL: Could not connect to database
+[2025-07-29 22:40:08] INFO: Application stopped
+[2025-07-30 10:18:21] INFO: Application started
+[2025-07-30 10:18:22] ERROR: NullPointerException in UserService.java
+[2025-07-30 10:18:23] WARNING: Memory usage high
+[2025-07-30 10:18:24] CRITICAL: Could not connect to database
+[2025-07-30 10:18:24] INFO: Application stopped
+[2025-07-30 10:42:34] INFO: Application started
+[2025-07-30 10:42:35] ERROR: NullPointerException in UserService.java
+[2025-07-30 10:42:36] WARNING: Memory usage high
+[2025-07-30 10:42:37] CRITICAL: Could not connect to database
+[2025-07-30 10:42:37] INFO: Application stopped

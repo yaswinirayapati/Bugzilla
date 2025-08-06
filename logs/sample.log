@@ -1,0 +1,14 @@
+[INFO] Process 0 completed successfully.
+[ERROR] ConnectionError occurred at iteration 0.
+[INFO] Process 1 completed successfully.
+[INFO] Process 2 completed successfully.
+[INFO] Process 3 completed successfully.
+[ERROR] ConnectionError occurred at iteration 3.
+[INFO] Process 4 completed successfully.
+[INFO] Process 5 completed successfully.
+[INFO] Process 6 completed successfully.
+[ERROR] ConnectionError occurred at iteration 6.
+[INFO] Process 7 completed successfully.
+[INFO] Process 8 completed successfully.
+[INFO] Process 9 completed successfully.
+[ERROR] ConnectionError occurred at iteration 9.

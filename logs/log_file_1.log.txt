@@ -1,0 +1,2 @@
+INFO: Process started successfully.
+INFO: Loading configuration.

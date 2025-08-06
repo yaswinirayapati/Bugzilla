@@ -1,0 +1,83 @@
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(to right, #a1c4fd, #c2e9fb);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding-top: 50px;
+}
+
+.container {
+  width: 90%;
+  max-width: 800px;
+  text-align: center;
+}
+
+.header {
+  background-color: #0077b6;
+  color: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  margin-bottom: 40px;
+}
+
+.upload-box {
+  background-color: white;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+}
+
+.upload-button {
+  display: inline-block;
+  background: linear-gradient(to right, #00b4db, #0083b0);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 50px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.upload-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.upload-button input {
+  display: none;
+}
+
+.get-button {
+  display: inline-block;
+  background: linear-gradient(to right, #00b4db, #0083b0); /* green-blue gradient */
+  color: rgb(255, 255, 255);
+  padding: 12px 24px;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-top: 20px;   /* Add this for spacing below upload */
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.get-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.output-box {
+  margin-top: 30px;
+  background-color: #fff8f8;
+  border-left: 5px solid #d00000;
+  padding: 20px;
+  border-radius: 8px;
+  color: #d00000;
+  font-family: monospace;
+  text-align: left;
+  white-space: pre-wrap;
+  display: none;
+}

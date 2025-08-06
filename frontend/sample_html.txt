@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bug Testing AI Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2rem;
+            gap: 10px;
+        }
+
+        .bug-icon {
+            width: 30px;
+            height: 30px;
+            background: #ff4757;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .bug-icon::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            width: 14px;
+            height: 14px;
+            background: #2f3542;
+            border-radius: 50%;
+        }
+
+        .bug-icon::after {
+            content: '';
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            width: 6px;
+            height: 6px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        h1 {
+            color: #2f3542;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .upload-section {
+            margin: 2rem 0;
+        }
+
+        .upload-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 1rem;
+            color: #2f3542;
+            font-weight: 500;
+        }
+
+        .folder-icon {
+            width: 20px;
+            height: 20px;
+            background: #ffa502;
+            border-radius: 3px;
+            position: relative;
+        }
+
+        .folder-icon::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: 2px;
+            width: 8px;
+            height: 4px;
+            background: #ffa502;
+            border-radius: 2px 2px 0 0;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-button {
+            background: #f1f2f6;
+            border: 2px solid #ddd;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #2f3542;
+            font-size: 14px;
+        }
+
+        .file-button:hover {
+            background: #e9ecef;
+        }
+
+        .selected-file {
+            color: #2f3542;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .analyze-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-top: 1rem;
+        }
+
+        .analyze-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .analyze-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            margin-top: 1rem;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .results {
+            margin-top: 1rem;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 1rem;
+            background: #f8f9fa;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 1rem;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="bug-icon"></div>
+            <h1>Bug Testing AI Agent</h1>
+        </div>
+
+        <div class="upload-section">
+            <div class="upload-label">
+                <div class="folder-icon"></div>
+                Upload Log File
+            </div>
+            <input type="file" id="logFile" class="file-input" accept=".log,.txt">
+            <button class="file-button" onclick="document.getElementById('logFile').click()">
+                Choose File
+            </button>
+            <div id="selectedFile" class="selected-file"></div>
+        </div>
+
+        <button id="analyzeBtn" class="analyze-btn" onclick="analyzeLog()">
+            Get
+        </button>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Analyzing log file...</p>
+        </div>
+
+        <div id="status"></div>
+        <div id="results" class="results" style="display: none;"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:5000/api';
+
+        // Update selected file name
+        document.getElementById('logFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('selectedFile').textContent = file.name;
+            }
+        });
+
+        async function analyzeLog() {
+            const fileInput = document.getElementById('logFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showStatus('Please select a log file first.', 'error');
+                return;
+            }
+
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            const loading = document.getElementById('loading');
+            const status = document.getElementById('status');
+            const results = document.getElementById('results');
+
+            // Show loading
+            analyzeBtn.disabled = true;
+            loading.style.display = 'block';
+            status.innerHTML = '';
+            results.style.display = 'none';
+
+            try {
+                const formData = new FormData();
+                formData.append('logFile', file);
+
+                const response = await fetch(`${API_BASE_URL}/analyze_v2`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showStatus(data.summary, 'success');
+                    showResults(data);
+                } else {
+                    showStatus(data.message || 'Analysis failed', 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            } finally {
+                analyzeBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function showResults(data) {
+            const results = document.getElementById('results');
+            let html = '<h3>Analysis Results:</h3>';
+            
+            if (data.detailed_analysis && data.detailed_analysis.length > 0) {
+                data.detailed_analysis.forEach((analysis, index) => {
+                    html += `
+                        <div style="margin-bottom: 1rem; padding: 10px; border-left: 4px solid #667eea; background: white;">
+                            <h4>Error ${index + 1}:</h4>
+                            <p><strong>Type:</strong> ${analysis.type}</p>
+                            <p><strong>Severity:</strong> ${analysis.severity}</p>
+                            <p><strong>Team:</strong> ${analysis.team}</p>
+                            <p><strong>Error:</strong> ${analysis.error}</p>
+                            ${analysis.ticket_url ? `<p><strong>Ticket:</strong> <a href="${analysis.ticket_url}" target="_blank">View in JIRA</a></p>` : ''}
+                            <details>
+                                <summary>AI Analysis</summary>
+                                <p style="margin-top: 10px; white-space: pre-wrap;">${analysis.ai_analysis}</p>
+                            </details>
+                        </div>
+                    `;
+                });
+            }
+            
+            results.innerHTML = html;
+            results.style.display = 'block';
+        }
+
+        // Check API status on page load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/status`);
+                const data = await response.json();
+                
+                if (data.server && data.server.includes('Running')) {
+                    showStatus('✅ Backend API is running', 'success');
+                } else {
+                    showStatus('❌ Backend API is not responding', 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Cannot connect to backend API. Make sure the server is running on port 5000.', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+INFO: User login successful.
+INFO: Session initialized.

@@ -1,0 +1,2 @@
+WARNING: Memory usage is high.
+ERROR: Out of memory.
