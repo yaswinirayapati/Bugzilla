@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 import os
 from dotenv import load_dotenv
 from jira import JIRA
@@ -184,18 +184,36 @@ def analyze_error_type(error_message):
     """Analyze error message to determine error type and severity"""
     error_lower = error_message.lower()
     
-    # Determine error type
-    if any(word in error_lower for word in ['timeout', 'connection refused']):
+    # More comprehensive error type detection
+    if any(word in error_lower for word in ['timeout', 'connection refused', 'connect', 'network']):
         error_type = "Connection Error"
-        severity = "Medium"
-    elif any(word in error_lower for word in ['null pointer', 'undefined', 'index out of range']):
+        severity = "High"
+    elif any(word in error_lower for word in ['null pointer', 'undefined', 'index out of range', 'null reference']):
         error_type = "Runtime Error"
         severity = "High"
-    elif any(word in error_lower for word in ['authentication', 'unauthorized', 'forbidden']):
+    elif any(word in error_lower for word in ['authentication', 'unauthorized', 'forbidden', 'auth']):
         error_type = "Security Error"
         severity = "Critical"
-    elif any(word in error_lower for word in ['database', 'sql', 'query']):
+    elif any(word in error_lower for word in ['database', 'sql', 'query', 'mysql', 'postgresql']):
         error_type = "Database Error"
+        severity = "High"
+    elif any(word in error_lower for word in ['soap', 'soapfault', 'xml']):
+        error_type = "SOAP Error"
+        severity = "High"
+    elif any(word in error_lower for word in ['rate limit', 'throttle', 'too many requests']):
+        error_type = "Rate Limit Error"
+        severity = "Medium"
+    elif any(word in error_lower for word in ['validation', 'invalid', 'format', 'parse']):
+        error_type = "Validation Error"
+        severity = "Medium"
+    elif any(word in error_lower for word in ['memory', 'out of memory', 'heap']):
+        error_type = "Memory Error"
+        severity = "High"
+    elif any(word in error_lower for word in ['file', 'file not found', 'io', 'path']):
+        error_type = "File Error"
+        severity = "Medium"
+    elif any(word in error_lower for word in ['permission', 'access denied']):
+        error_type = "Permission Error"
         severity = "High"
     else:
         error_type = "General Error"
@@ -769,6 +787,57 @@ def status():
         }
     })
 
+@app.route("/health")
+def health():
+    """Health check endpoint for Render deployment"""
+    return jsonify({
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat()
+    })
+
+@app.route("/api/download-pdf", methods=["POST"])
+def download_pdf():
+    """Generate and download analysis results as PDF"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        # Create PDF content
+        pdf_content = f"""
+Bug Tester AI - Analysis Report
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+SUMMARY:
+{data.get('summary', 'No summary available')}
+
+DETAILED ANALYSIS:
+"""
+        
+        # Add detailed analysis
+        detailed_analysis = data.get('detailed_analysis', [])
+        for i, analysis in enumerate(detailed_analysis, 1):
+            pdf_content += f"""
+Error {i}:
+- Type: {analysis.get('type', 'Unknown')}
+- Severity: {analysis.get('severity', 'Unknown')}
+- Team: {analysis.get('team', 'Unknown')}
+- Status: {analysis.get('test_status', 'Unknown')}
+- Error Message: {analysis.get('error', 'No error message')}
+- AI Analysis: {analysis.get('ai_analysis', 'No AI analysis')}
+"""
+        
+        # For now, return as text file (PDF generation requires additional libraries)
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(pdf_content)
+            temp_file = f.name
+        
+        return send_file(temp_file, as_attachment=True, download_name='bug_analysis_report.txt')
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route("/api/errors")
 def errors():
     # Read last 10 errors from log file
@@ -863,15 +932,29 @@ def analyze():
         # Process only failed test cases for detailed analysis
         detailed_analysis = []
         tickets_created = []
-        max_tickets_to_create = 5  # Configurable limit to prevent spam
+        max_tickets_to_create = 50  # Increased limit to handle more tickets
         tickets_to_process = min(len(failed_tests), max_tickets_to_create)
         
         print(f"🔍 Processing {total_tests} test cases ({total_passed} passed, {total_failed} failed)...")
         print(f"📋 Creating tickets for first {tickets_to_process} failed tests (limit: {max_tickets_to_create})")
         
-        # Process ONLY failed test cases for detailed analysis
+        # Process both passed and failed test cases for display
+        # But only create JIRA tickets for failed tests
         failed_count = 0  # Track how many failed tests we've processed for tickets
         
+        # First, add passed tests to detailed analysis (without AI analysis)
+        for test_data in passed_tests:
+            detailed_analysis.append({
+                'error': test_data['content'],
+                'type': 'Test Passed',
+                'severity': 'None',
+                'team': 'N/A',
+                'ai_analysis': '✅ Test passed successfully - no action required',
+                'ticket_url': None,
+                'test_status': 'PASSED'
+            })
+        
+        # Then process failed tests with AI analysis
         for test_data in failed_tests:
             error_message = test_data['content']
             
@@ -1078,4 +1161,8 @@ def analyze_qwen():
         return jsonify({"success": False, "error": f"AI analysis failed: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # Get port from environment variable for Render deployment
+    port = int(os.environ.get("PORT", 5000))
+    # Disable debug mode for production deployment
+    debug_mode = os.environ.get("FLASK_ENV") == "development"
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)

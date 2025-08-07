@@ -217,6 +217,8 @@
                     if (output) {
                         output.style.display = "none";
                     }
+                    // Store data for download
+                    window.lastAnalysisData = data;
                     displayResults(data);
                 } else {
                     showStatus(`Failed: ${data.error || 'Analysis failed.'}`, 'text-red-600');
@@ -289,39 +291,48 @@
                     `;
 
                     data.detailed_analysis.forEach((analysis, index) => {
+                        const isPassed = analysis.test_status === 'PASSED';
+                        const statusColor = isPassed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                        const statusText = isPassed ? 'PASSED' : 'FAILED';
+                        
                         htmlContent += `
                             <div class="bg-white border border-gray-200 rounded-md p-4 mb-4">
                                 <div class="flex items-center justify-between mb-2">
-                                    <h4 class="font-medium text-gray-800">Error ${index + 1}</h4>
+                                    <h4 class="font-medium text-gray-800">${isPassed ? 'Test' : 'Error'} ${index + 1}</h4>
                                     <div class="flex space-x-2">
-                                        <span class="px-2 py-1 text-xs rounded-full ${analysis.severity === 'Critical' ? 'bg-red-100 text-red-800' : analysis.severity === 'High' ? 'bg-orange-100 text-orange-800' : 'bg-yellow-100 text-yellow-800'}">${analysis.severity}</span>
-                                        <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">${analysis.team}</span>
-                                        <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">${analysis.type}</span>
+                                        <span class="px-2 py-1 text-xs rounded-full ${statusColor}">${statusText}</span>
+                                        ${!isPassed ? `
+                                            <span class="px-2 py-1 text-xs rounded-full ${analysis.severity === 'Critical' ? 'bg-red-100 text-red-800' : analysis.severity === 'High' ? 'bg-orange-100 text-orange-800' : 'bg-yellow-100 text-yellow-800'}">${analysis.severity}</span>
+                                            <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">${analysis.team}</span>
+                                            <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">${analysis.type}</span>
+                                        ` : ''}
                                     </div>
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <strong class="text-gray-700">Error Message:</strong>
+                                    <strong class="text-gray-700">${isPassed ? 'Test Message:' : 'Error Message:'}</strong>
                                     <pre class="bg-gray-50 p-2 rounded text-sm mt-1 overflow-x-auto">${analysis.error}</pre>
                                 </div>
                                 
-                                <div class="mb-3">
-                                    <strong class="text-gray-700">AI Analysis:</strong>
-                                    <div class="bg-blue-50 p-3 rounded mt-1">
-                                        <pre class="whitespace-pre-wrap text-sm">${analysis.ai_analysis}</pre>
+                                ${!isPassed ? `
+                                    <div class="mb-3">
+                                        <strong class="text-gray-700">AI Analysis:</strong>
+                                        <div class="bg-blue-50 p-3 rounded mt-1">
+                                            <pre class="whitespace-pre-wrap text-sm">${analysis.ai_analysis}</pre>
+                                        </div>
                                     </div>
-                                </div>
-                                
-                                ${analysis.ticket_url ? `
-                                    <div class="mt-3">
-                                        <a href="${analysis.ticket_url}" target="_blank" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
-                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                                            </svg>
-                                            View JIRA Ticket
-                                        </a>
-                                    </div>
-                                ` : '<p class="text-red-600 text-sm">❌ Failed to create JIRA ticket</p>'}
+                                    
+                                    ${analysis.ticket_url ? `
+                                        <div class="mt-3">
+                                            <a href="${analysis.ticket_url}" target="_blank" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                                </svg>
+                                                View JIRA Ticket
+                                            </a>
+                                        </div>
+                                    ` : '<p class="text-red-600 text-sm">❌ Failed to create JIRA ticket</p>'}
+                                ` : ''}
                             </div>
                         `;
                     });
@@ -355,6 +366,19 @@
                 if (htmlContent && resultContent && resultsDiv) {
                     resultContent.innerHTML = htmlContent;
                     resultsDiv.classList.remove('hidden');
+                    
+                    // Add download button
+                    const downloadBtn = document.createElement('div');
+                    downloadBtn.className = 'mt-6 text-center';
+                    downloadBtn.innerHTML = `
+                        <button onclick="downloadReport()" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Download Report
+                        </button>
+                    `;
+                    resultsDiv.appendChild(downloadBtn);
                 } else if (resultContent && resultsDiv) {
                     resultContent.innerHTML = `<p class="text-gray-600">No analysis results available.</p>`;
                     resultsDiv.classList.remove('hidden');
@@ -398,6 +422,35 @@
             }
         });
 
+        // Download report function
+        async function downloadReport() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/download-pdf`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(window.lastAnalysisData)
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'bug_analysis_report.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    alert('Failed to download report');
+                }
+            } catch (error) {
+                console.error('Download failed:', error);
+                alert('Failed to download report');
+            }
+        }
     </script>
 </body>
 </html>
