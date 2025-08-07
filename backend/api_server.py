@@ -108,7 +108,7 @@ TICKETS = []
 
 # Rate limiting for AI requests - Reduced for faster processing
 LAST_AI_REQUEST_TIME = 0
-MIN_REQUEST_INTERVAL = 10  # Reduced to 10 seconds for faster processing
+MIN_REQUEST_INTERVAL = 3  # Reduced to 3 seconds for faster processing
 
 # Cache for AI analysis to avoid repeated calls
 AI_ANALYSIS_CACHE = {}
@@ -382,6 +382,151 @@ def make_request_with_retry(url, max_retries=3):
 **Technical Impact**: Security vulnerability and access control issues.
 
 **Recommended Priority**: Critical
+        """
+    elif "soap" in error_lower or "soapfault" in error_lower:
+        return f"""
+**Root Cause Analysis**: SOAP (Simple Object Access Protocol) communication failure. This typically occurs due to malformed SOAP requests, network issues, or service endpoint problems.
+
+**Immediate Fix Steps**:
+1. Validate SOAP request format and structure
+2. Check SOAP endpoint URL and accessibility
+3. Verify SOAP envelope and namespace declarations
+4. Review SOAP fault handling and error codes
+5. Test SOAP service with different clients
+
+**Prevention Measures**:
+- Implement proper SOAP request validation
+- Add SOAP fault handling and retry logic
+- Use SOAP monitoring and health checks
+- Implement request/response logging for debugging
+
+**Technical Impact**: Service communication failures, data exchange issues, and integration problems.
+
+**Recommended Priority**: High (affects service integration)
+
+**Code Example**:
+```python
+# SOAP request with proper error handling
+import requests
+from zeep import Client
+from zeep.exceptions import Fault
+
+try:
+    client = Client('http://service.wsdl')
+    result = client.service.method(param1, param2)
+except Fault as e:
+    print(f"SOAP Fault: {e.message}")
+    # Handle specific fault codes
+```
+
+**Monitoring Suggestions**:
+- Monitor SOAP request/response times
+- Track SOAP fault occurrences and types
+- Set up alerts for SOAP communication failures
+- Log SOAP envelope details for debugging
+        """
+    elif "rate limit" in error_lower or "throttle" in error_lower:
+        return f"""
+**Root Cause Analysis**: API rate limiting or throttling exceeded. The service is rejecting requests due to too many calls in a short time period.
+
+**Immediate Fix Steps**:
+1. Implement request rate limiting on client side
+2. Add exponential backoff and retry logic
+3. Review API usage patterns and optimize
+4. Check for request batching opportunities
+5. Contact API provider for rate limit increase if needed
+
+**Prevention Measures**:
+- Implement client-side rate limiting (requests per second)
+- Use request queuing and batching
+- Add circuit breaker pattern for API calls
+- Monitor API usage and set up alerts
+
+**Technical Impact**: Service degradation, increased response times, and potential service unavailability.
+
+**Recommended Priority**: Medium (affects performance)
+
+**Code Example**:
+```python
+# Rate limiting with exponential backoff
+import time
+import requests
+
+class RateLimitedClient:
+    def __init__(self, max_requests=10, time_window=60):
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.requests = []
+    
+    def make_request(self, url):
+        now = time.time()
+        # Remove old requests
+        self.requests = [req for req in self.requests if now - req < self.time_window]
+        
+        if len(self.requests) >= self.max_requests:
+            sleep_time = self.time_window - (now - self.requests[0])
+            time.sleep(sleep_time)
+        
+        self.requests.append(now)
+        return requests.get(url)
+```
+
+**Monitoring Suggestions**:
+- Track API request rates and limits
+- Monitor rate limit errors and retry attempts
+- Set up alerts for approaching rate limits
+- Log request patterns for optimization
+        """
+    elif "configuration" in error_lower or "config" in error_lower or "format" in error_lower:
+        return f"""
+**Root Cause Analysis**: Configuration or format error in application settings. This typically occurs due to invalid configuration parameters, missing required settings, or format mismatches.
+
+**Immediate Fix Steps**:
+1. Validate configuration file format and syntax
+2. Check for missing required configuration parameters
+3. Verify data format specifications (CSV, JSON, XML)
+4. Review configuration validation rules
+5. Test configuration with different environments
+
+**Prevention Measures**:
+- Implement configuration validation and schema checking
+- Add configuration testing in CI/CD pipeline
+- Use configuration management tools
+- Implement configuration backup and versioning
+
+**Technical Impact**: Application startup failures, incorrect behavior, and data processing issues.
+
+**Recommended Priority**: Medium (affects application functionality)
+
+**Code Example**:
+```python
+# Configuration validation
+import yaml
+import jsonschema
+
+def validate_config(config_path):
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    schema = {
+        "type": "object",
+        "properties": {
+            "database": {"type": "object"},
+            "api": {"type": "object"},
+            "logging": {"type": "object"}
+        },
+        "required": ["database", "api"]
+    }
+    
+    jsonschema.validate(config, schema)
+    return config
+```
+
+**Monitoring Suggestions**:
+- Monitor configuration loading and validation
+- Track configuration-related errors
+- Set up alerts for configuration failures
+- Log configuration changes and validation results
         """
     else:
         return f"""
