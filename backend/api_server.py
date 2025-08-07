@@ -646,7 +646,17 @@ def create_detailed_jira_ticket(error_message, error_type, severity, assigned_te
 
 @app.route("/")
 def home():
-    return "Welcome to the Bugzilla-F API! Try /api/status for health check."
+    """Root endpoint for health checks"""
+    return jsonify({
+        "message": "Bug Tester AI API is running",
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "endpoints": {
+            "health": "/health",
+            "status": "/api/status",
+            "analyze": "/api/analyze"
+        }
+    })
 
 @app.route("/api/analyze", methods=["OPTIONS"])
 def analyze_options():
@@ -793,8 +803,12 @@ def health():
     """Health check endpoint for Render deployment"""
     return jsonify({
         "status": "healthy",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "service": "Bug Tester AI",
+        "version": "1.0.0"
     })
+
+
 
 @app.route("/api/download-pdf", methods=["POST"])
 def download_pdf():
@@ -1162,8 +1176,12 @@ def analyze_qwen():
         return jsonify({"success": False, "error": f"AI analysis failed: {str(e)}"}), 500
 
 if __name__ == "__main__":
-    # Get port from environment variable for Render deployment
-    port = int(os.environ.get("PORT", 5000))
-    # Disable debug mode for production deployment
-    debug_mode = os.environ.get("FLASK_ENV") == "development"
-    app.run(host="0.0.0.0", port=port, debug=debug_mode)
+    # Only run development server if not in production
+    if os.environ.get("RENDER") != "true":
+        # Get port from environment variable for Render deployment
+        port = int(os.environ.get("PORT", 5000))
+        # Disable debug mode for production deployment
+        debug_mode = os.environ.get("FLASK_ENV") == "development"
+        app.run(host="0.0.0.0", port=port, debug=debug_mode)
+    else:
+        print("Running in production mode - use Gunicorn to start the application")
